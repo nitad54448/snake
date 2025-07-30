@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Snake Game</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom styles for the game */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark blue-gray background */
+            background-image: radial-gradient(circle at 1px 1px, #374151 1px, transparent 0);
+            background-size: 30px 30px;
+        }
+
+        /* Styling for the game canvas */
+        #gameCanvas {
+            background-color: #0c1017;
+            border: 2px solid #374151;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Styling for the game overlay (start/game over) */
+        #gameOverlay {
+            background: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 text-gray-200">
+
+    <header class="text-center mb-4">
+        <h1 class="text-4xl font-bold text-white">Snake</h1>
+        <div class="text-lg text-gray-300 mt-2">Score: <span id="score" class="font-bold text-teal-400">0</span></div>
+    </header>
+
+    <div class="relative">
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+        <div id="gameOverlay" class="absolute inset-0 flex flex-col items-center justify-center rounded-lg">
+            <h2 id="overlayTitle" class="text-3xl font-bold text-white mb-4">Ready to Play?</h2>
+            <p id="overlayText" class="text-gray-300 mb-6">Use Arrow Keys to move. Avoid the walls and blocks!</p>
+            <button id="startBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-lg text-xl transition-transform transform hover:scale-105">
+                Start Game
+            </button>
+        </div>
+    </div>
+    
+    <footer class="text-center mt-8">
+      <a href="https://nitad54448.github.io" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-gray-400 transition-colors">
+        nitad54448.github.io
+      </a>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Game Setup ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const scoreElement = document.getElementById('score');
+            
+            // Overlay elements
+            const gameOverlay = document.getElementById('gameOverlay');
+            const overlayTitle = document.getElementById('overlayTitle');
+            const overlayText = document.getElementById('overlayText');
+            const startBtn = document.getElementById('startBtn');
+
+            const gridSize = 20;
+            const numObstacles = 10;
+            let snake, food, obstacles, score, dx, dy, changingDirection, gameLoopTimeout;
+
+            // --- Game State Functions ---
+            
+            /**
+             * Initializes or resets the game state to its default values.
+             */
+            function initializeGame() {
+                // Initial snake position and parts (centered)
+                const startX = Math.floor(canvas.width / 2 / gridSize) * gridSize;
+                const startY = Math.floor(canvas.height / 2 / gridSize) * gridSize;
+                snake = [
+                    { x: startX, y: startY },
+                    { x: startX - gridSize, y: startY },
+                    { x: startX - gridSize * 2, y: startY },
+                    { x: startX - gridSize * 3, y: startY },
+                    { x: startX - gridSize * 4, y: startY }
+                ];
+                
+                // Initial food and obstacles
+                food = { x: 0, y: 0 };
+                obstacles = [];
+                
+                // Initial score and velocity
+                score = 0;
+                dx = gridSize;
+                dy = 0;
+                
+                // Flags and display reset
+                changingDirection = false;
+                scoreElement.textContent = 0;
+                
+                generateObstacles(numObstacles);
+                generateFood();
+            }
+            
+            /**
+             * The main function that drives the game, running in a loop.
+             */
+            function main() {
+                if (didGameEnd()) {
+                    showGameOver();
+                    return;
+                }
+
+                changingDirection = false;
+                gameLoopTimeout = setTimeout(function onTick() {
+                    clearCanvas();
+                    drawObstacles();
+                    drawFood();
+                    moveSnake();
+                    drawSnake();
+                    // Call main again to create the loop
+                    main();
+                }, 100);
+            }
+
+            // --- Drawing Functions ---
+
+            /**
+             * Clears the entire canvas for the next frame.
+             */
+            function clearCanvas() {
+                ctx.fillStyle = '#0c1017';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            /**
+             * Draws a single segment of the snake on the canvas.
+             * @param {object} snakePart - The snake segment with x and y coordinates.
+             */
+            function drawSnakePart(snakePart) {
+                ctx.fillStyle = '#34D399'; // Greenish color for the snake
+                ctx.strokeStyle = '#111827';
+                ctx.fillRect(snakePart.x, snakePart.y, gridSize, gridSize);
+                ctx.strokeRect(snakePart.x, snakePart.y, gridSize, gridSize);
+            }
+
+            /**
+             * Loops through the snake array and draws each part.
+             */
+            function drawSnake() {
+                snake.forEach(drawSnakePart);
+            }
+
+            /**
+             * Draws the food on the canvas.
+             */
+            function drawFood() {
+                ctx.fillStyle = '#F87171'; // Reddish color for the food
+                ctx.strokeStyle = '#450A0A';
+                ctx.fillRect(food.x, food.y, gridSize, gridSize);
+                ctx.strokeRect(food.x, food.y, gridSize, gridSize);
+            }
+            
+            /**
+             * Draws all obstacles on the canvas.
+             */
+            function drawObstacles() {
+                ctx.fillStyle = '#4B5563'; // Gray color for obstacles
+                ctx.strokeStyle = '#1F2937';
+                obstacles.forEach(obstacle => {
+                    ctx.fillRect(obstacle.x, obstacle.y, gridSize, gridSize);
+                    ctx.strokeRect(obstacle.x, obstacle.y, gridSize, gridSize);
+                });
+            }
+
+            // --- Game Logic Functions ---
+            
+            /**
+             * Generates a random coordinate for food or obstacle placement.
+             * @param {number} min - The minimum coordinate value.
+             * @param {number} max - The maximum coordinate value.
+             * @returns {number} A random coordinate snapped to the grid.
+             */
+            function randomGridCoord(min, max) {
+                return Math.round((Math.random() * (max - min) + min) / gridSize) * gridSize;
+            }
+            
+            /**
+             * Creates a set number of obstacles at random locations.
+             * @param {number} count - The number of obstacles to generate.
+             */
+            function generateObstacles(count) {
+                obstacles = []; // Clear existing obstacles
+                for (let i = 0; i < count; i++) {
+                    let obstacleX, obstacleY, onSnake;
+                    do {
+                        onSnake = false;
+                        obstacleX = randomGridCoord(0, canvas.width - gridSize);
+                        obstacleY = randomGridCoord(0, canvas.height - gridSize);
+                        // Ensure obstacle doesn't spawn on the initial snake
+                        for (const part of snake) {
+                            if (part.x === obstacleX && part.y === obstacleY) {
+                                onSnake = true;
+                                break;
+                            }
+                        }
+                    } while (onSnake);
+                    obstacles.push({ x: obstacleX, y: obstacleY });
+                }
+            }
+
+            /**
+             * Creates new food at a random location, ensuring it's not on the snake or an obstacle.
+             */
+            function generateFood() {
+                let onObject;
+                do {
+                    onObject = false;
+                    food.x = randomGridCoord(0, canvas.width - gridSize);
+                    food.y = randomGridCoord(0, canvas.height - gridSize);
+                    
+                    // Check if on snake
+                    for (const part of snake) {
+                        if (part.x === food.x && part.y === food.y) {
+                            onObject = true;
+                            break;
+                        }
+                    }
+                    if(onObject) continue;
+
+                    // Check if on obstacle
+                    for (const obstacle of obstacles) {
+                        if (obstacle.x === food.x && obstacle.y === food.y) {
+                            onObject = true;
+                            break;
+                        }
+                    }
+                } while (onObject);
+            }
+
+            /**
+             * Moves the snake by one grid unit and handles food collision.
+             */
+            function moveSnake() {
+                const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+                snake.unshift(head); // Add new head to the front
+
+                const didEatFood = snake[0].x === food.x && snake[0].y === food.y;
+                if (didEatFood) {
+                    score += 10;
+                    scoreElement.textContent = score;
+                    generateFood();
+                } else {
+                    snake.pop(); // Remove the tail
+                }
+            }
+            
+            /**
+             * Checks for game-ending conditions (wall, self, or obstacle collision).
+             * @returns {boolean} True if the game has ended, false otherwise.
+             */
+            function didGameEnd() {
+                const head = snake[0];
+                // Check for self-collision
+                for (let i = 4; i < snake.length; i++) {
+                    if (snake[i].x === head.x && snake[i].y === head.y) return true;
+                }
+                
+                // Check for obstacle collision
+                for (const obstacle of obstacles) {
+                    if (obstacle.x === head.x && obstacle.y === head.y) return true;
+                }
+
+                // Check for wall collision
+                const hitLeftWall = head.x < 0;
+                const hitRightWall = head.x >= canvas.width;
+                const hitTopWall = head.y < 0;
+                const hitBottomWall = head.y >= canvas.height;
+                return hitLeftWall || hitRightWall || hitTopWall || hitBottomWall;
+            }
+
+            /**
+             * Handles keyboard input to change the snake's direction.
+             * @param {KeyboardEvent} event - The keydown event.
+             */
+            function changeDirection(event) {
+                const LEFT_KEY = 37;
+                const RIGHT_KEY = 39;
+                const UP_KEY = 38;
+                const DOWN_KEY = 40;
+                const keyPressed = event.keyCode;
+
+                // Prevent the page from scrolling when arrow keys are pressed
+                if ([LEFT_KEY, RIGHT_KEY, UP_KEY, DOWN_KEY].includes(keyPressed)) {
+                    event.preventDefault();
+                }
+
+                if (changingDirection) return;
+                changingDirection = true;
+
+                const goingUp = dy === -gridSize;
+                const goingDown = dy === gridSize;
+                const goingRight = dx === gridSize;
+                const goingLeft = dx === -gridSize;
+
+                if (keyPressed === LEFT_KEY && !goingRight) {
+                    dx = -gridSize;
+                    dy = 0;
+                }
+                if (keyPressed === UP_KEY && !goingDown) {
+                    dx = 0;
+                    dy = -gridSize;
+                }
+                if (keyPressed === RIGHT_KEY && !goingLeft) {
+                    dx = gridSize;
+                    dy = 0;
+                }
+                if (keyPressed === DOWN_KEY && !goingUp) {
+                    dx = 0;
+                    dy = gridSize;
+                }
+            }
+            
+            /**
+             * Shows the game over screen.
+             */
+            function showGameOver() {
+                overlayTitle.textContent = 'Game Over!';
+                overlayText.textContent = `Your final score is ${score}.`;
+                startBtn.textContent = 'Play Again';
+                gameOverlay.style.display = 'flex';
+            }
+
+            /**
+             * Starts the game loop and hides the overlay.
+             */
+            function startGame() {
+                gameOverlay.style.display = 'none';
+                clearTimeout(gameLoopTimeout); // Clear any existing loop
+                initializeGame();
+                main();
+            }
+
+            // --- Event Listeners ---
+            document.addEventListener('keydown', changeDirection);
+            startBtn.addEventListener('click', startGame);
+        });
+    </script>
+</body>
+</html>
