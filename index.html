@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classic Snake Game</title>
     
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -41,11 +39,14 @@
 
     <header class="text-center mb-4">
         <h1 class="text-4xl font-bold text-white">Snake</h1>
-        <div class="text-lg text-gray-300 mt-2">Score: <span id="score" class="font-bold text-teal-400">0</span></div>
+        <div class="text-lg text-gray-300 mt-2">
+            Score: <span id="score" class="font-bold text-teal-400">0</span> | 
+            Level: <span id="level" class="font-bold text-orange-400">1</span>
+        </div>
     </header>
 
     <div class="relative">
-        <canvas id="gameCanvas" width="600" height="600"></canvas>
+        <canvas id="gameCanvas" width="800" height="800"></canvas>
         <div id="gameOverlay" class="absolute inset-0 flex flex-col items-center justify-center rounded-lg">
             <h2 id="overlayTitle" class="text-3xl font-bold text-white mb-4">Ready to Play?</h2>
             <p id="overlayText" class="text-gray-300 mb-6">Use Arrow Keys to move. Avoid the walls and blocks!</p>
@@ -68,6 +69,9 @@
             const ctx = canvas.getContext('2d');
             const scoreElement = document.getElementById('score');
             
+            // MODIFICATION: Added level element
+            const levelElement = document.getElementById('level');
+            
             // Overlay elements
             const gameOverlay = document.getElementById('gameOverlay');
             const overlayTitle = document.getElementById('overlayTitle');
@@ -75,8 +79,9 @@
             const startBtn = document.getElementById('startBtn');
 
             const gridSize = 20;
-            const numObstacles = 10;
-            let snake, food, obstacles, score, dx, dy, changingDirection, gameLoopTimeout;
+            // MODIFICATION: Changed numObstacles from const to let for dynamic changes
+            let numObstacles; 
+            let snake, food, obstacles, score, level, dx, dy, changingDirection, gameLoopTimeout, gameSpeed;
 
             // --- Game State Functions ---
             
@@ -95,21 +100,39 @@
                     { x: startX - gridSize * 4, y: startY }
                 ];
                 
-                // Initial food and obstacles
                 food = { x: 0, y: 0 };
                 obstacles = [];
                 
-                // Initial score and velocity
+                // MODIFICATION: Initialize level, speed, and obstacle count
                 score = 0;
+                level = 1;
+                gameSpeed = 150; // Initial speed in ms (higher is slower)
+                numObstacles = 8; // Initial number of obstacles
+                
                 dx = gridSize;
                 dy = 0;
                 
-                // Flags and display reset
                 changingDirection = false;
                 scoreElement.textContent = 0;
+                levelElement.textContent = 1; // Reset level display
                 
                 generateObstacles(numObstacles);
                 generateFood();
+            }
+
+            /**
+             * Levels up the game, increasing speed and obstacles.
+             */
+            function levelUp() {
+                level++;
+                levelElement.textContent = level;
+                
+                // Increase speed (decrease timeout delay), with a minimum speed limit
+                gameSpeed = Math.max(60, gameSpeed - 15);
+                
+                // Increase the number of obstacles
+                numObstacles += 2;
+                generateObstacles(numObstacles);
             }
             
             /**
@@ -122,31 +145,24 @@
                 }
 
                 changingDirection = false;
+                // MODIFICATION: Use dynamic gameSpeed for the timeout
                 gameLoopTimeout = setTimeout(function onTick() {
                     clearCanvas();
                     drawObstacles();
                     drawFood();
                     moveSnake();
                     drawSnake();
-                    // Call main again to create the loop
                     main();
-                }, 100);
+                }, gameSpeed);
             }
 
             // --- Drawing Functions ---
 
-            /**
-             * Clears the entire canvas for the next frame.
-             */
             function clearCanvas() {
                 ctx.fillStyle = '#0c1017';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
 
-            /**
-             * Draws a single segment of the snake on the canvas.
-             * @param {object} snakePart - The snake segment with x and y coordinates.
-             */
             function drawSnakePart(snakePart) {
                 ctx.fillStyle = '#34D399'; // Greenish color for the snake
                 ctx.strokeStyle = '#111827';
@@ -154,16 +170,10 @@
                 ctx.strokeRect(snakePart.x, snakePart.y, gridSize, gridSize);
             }
 
-            /**
-             * Loops through the snake array and draws each part.
-             */
             function drawSnake() {
                 snake.forEach(drawSnakePart);
             }
 
-            /**
-             * Draws the food on the canvas.
-             */
             function drawFood() {
                 ctx.fillStyle = '#F87171'; // Reddish color for the food
                 ctx.strokeStyle = '#450A0A';
@@ -171,9 +181,6 @@
                 ctx.strokeRect(food.x, food.y, gridSize, gridSize);
             }
             
-            /**
-             * Draws all obstacles on the canvas.
-             */
             function drawObstacles() {
                 ctx.fillStyle = '#4B5563'; // Gray color for obstacles
                 ctx.strokeStyle = '#1F2937';
@@ -185,20 +192,10 @@
 
             // --- Game Logic Functions ---
             
-            /**
-             * Generates a random coordinate for food or obstacle placement.
-             * @param {number} min - The minimum coordinate value.
-             * @param {number} max - The maximum coordinate value.
-             * @returns {number} A random coordinate snapped to the grid.
-             */
             function randomGridCoord(min, max) {
                 return Math.round((Math.random() * (max - min) + min) / gridSize) * gridSize;
             }
             
-            /**
-             * Creates a set number of obstacles at random locations.
-             * @param {number} count - The number of obstacles to generate.
-             */
             function generateObstacles(count) {
                 obstacles = []; // Clear existing obstacles
                 for (let i = 0; i < count; i++) {
@@ -207,7 +204,6 @@
                         onSnake = false;
                         obstacleX = randomGridCoord(0, canvas.width - gridSize);
                         obstacleY = randomGridCoord(0, canvas.height - gridSize);
-                        // Ensure obstacle doesn't spawn on the initial snake
                         for (const part of snake) {
                             if (part.x === obstacleX && part.y === obstacleY) {
                                 onSnake = true;
@@ -219,9 +215,6 @@
                 }
             }
 
-            /**
-             * Creates new food at a random location, ensuring it's not on the snake or an obstacle.
-             */
             function generateFood() {
                 let onObject;
                 do {
@@ -229,7 +222,6 @@
                     food.x = randomGridCoord(0, canvas.width - gridSize);
                     food.y = randomGridCoord(0, canvas.height - gridSize);
                     
-                    // Check if on snake
                     for (const part of snake) {
                         if (part.x === food.x && part.y === food.y) {
                             onObject = true;
@@ -238,7 +230,6 @@
                     }
                     if(onObject) continue;
 
-                    // Check if on obstacle
                     for (const obstacle of obstacles) {
                         if (obstacle.x === food.x && obstacle.y === food.y) {
                             onObject = true;
@@ -248,40 +239,36 @@
                 } while (onObject);
             }
 
-            /**
-             * Moves the snake by one grid unit and handles food collision.
-             */
             function moveSnake() {
                 const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-                snake.unshift(head); // Add new head to the front
+                snake.unshift(head);
 
                 const didEatFood = snake[0].x === food.x && snake[0].y === food.y;
                 if (didEatFood) {
                     score += 10;
                     scoreElement.textContent = score;
+                    
+                    // MODIFICATION: Check if it's time to level up (every 50 points)
+                    if (score % 50 === 0) {
+                        levelUp();
+                    }
+                    
                     generateFood();
                 } else {
-                    snake.pop(); // Remove the tail
+                    snake.pop();
                 }
             }
             
-            /**
-             * Checks for game-ending conditions (wall, self, or obstacle collision).
-             * @returns {boolean} True if the game has ended, false otherwise.
-             */
             function didGameEnd() {
                 const head = snake[0];
-                // Check for self-collision
                 for (let i = 4; i < snake.length; i++) {
                     if (snake[i].x === head.x && snake[i].y === head.y) return true;
                 }
                 
-                // Check for obstacle collision
                 for (const obstacle of obstacles) {
                     if (obstacle.x === head.x && obstacle.y === head.y) return true;
                 }
 
-                // Check for wall collision
                 const hitLeftWall = head.x < 0;
                 const hitRightWall = head.x >= canvas.width;
                 const hitTopWall = head.y < 0;
@@ -289,10 +276,6 @@
                 return hitLeftWall || hitRightWall || hitTopWall || hitBottomWall;
             }
 
-            /**
-             * Handles keyboard input to change the snake's direction.
-             * @param {KeyboardEvent} event - The keydown event.
-             */
             function changeDirection(event) {
                 const LEFT_KEY = 37;
                 const RIGHT_KEY = 39;
@@ -300,7 +283,6 @@
                 const DOWN_KEY = 40;
                 const keyPressed = event.keyCode;
 
-                // Prevent the page from scrolling when arrow keys are pressed
                 if ([LEFT_KEY, RIGHT_KEY, UP_KEY, DOWN_KEY].includes(keyPressed)) {
                     event.preventDefault();
                 }
@@ -331,22 +313,17 @@
                 }
             }
             
-            /**
-             * Shows the game over screen.
-             */
             function showGameOver() {
                 overlayTitle.textContent = 'Game Over!';
-                overlayText.textContent = `Your final score is ${score}.`;
+                // MODIFICATION: Added level to the game over text
+                overlayText.textContent = `Your final score is ${score} at Level ${level}.`;
                 startBtn.textContent = 'Play Again';
                 gameOverlay.style.display = 'flex';
             }
 
-            /**
-             * Starts the game loop and hides the overlay.
-             */
             function startGame() {
                 gameOverlay.style.display = 'none';
-                clearTimeout(gameLoopTimeout); // Clear any existing loop
+                clearTimeout(gameLoopTimeout);
                 initializeGame();
                 main();
             }
